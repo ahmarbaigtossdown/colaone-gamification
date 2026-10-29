@@ -266,3 +266,70 @@
   font-size:0;
 }
 .app.stage-game .hub:disabled{cursor:not-allowed}
+
+/* Let every stage grow with its content. Short laptop viewports can scroll
+   instead of clipping the CTA, form, wheel, or claim controls. */
+.app,
+.screen,
+.shell{
+  height:auto;
+  min-height:100svh;
+  overflow:visible;
+}
+.logo-button{
+  display:grid;
+  place-items:center;
+  width:84px;
+  height:84px;
+  padding:0;
+  border:0;
+  background:transparent;
+  border-radius:50%;
+}
+.logo-button:focus-visible{
+  outline:3px solid var(--b);
+  outline-offset:4px;
+}
+.interaction-screen .inner{
+  flex:0 0 auto;
+  height:auto;
+  min-height:calc(100svh - 130px);
+  overflow:visible;
+}
+.interaction-screen .side-art{min-height:0}
+.interaction-screen .card{
+  max-height:none;
+  overflow:visible;
+}
+
+@media (min-width:1001px){
+  .landing-screen .entry{
+    flex:0 0 auto;
+    min-height:calc(100svh - 172px);
+  }
+  .landing-screen .mega{
+    max-width:min(62vw,620px);
+    font-size:clamp(72px,min(8.5vw,15vh),142px);
+  }
+  .landing-screen .hero-copy p{
+    font-size:clamp(13px,min(1.1vw,2vh),17px);
+  }
+  .interaction-screen .inner{
+    align-items:center;
+    padding-top:24px;
+    padding-bottom:32px;
+  }
+  .interaction-screen .card h2{
+    font-size:clamp(40px,min(3.8vw,7.5vh),56px);
+  }
+  .logo-button{width:84px;height:84px}
+}
+
+@media (max-width:1000px){
+  .logo-button{width:64px;height:64px}
+  .interaction-screen .inner{min-height:0}
+}
+
+@media (max-width:620px){
+  .logo-button{width:64px;height:64px}
+}

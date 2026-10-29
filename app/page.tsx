@@ -117,6 +117,18 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function goToLanding() {
+    setStage("landing");
+    setSlide(0);
+    setRotation(0);
+    setIsSpinning(false);
+    setClaimed(false);
+    setCopyStatus("");
+    setSubmitted(false);
+    setErrors({});
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function updateField(field: keyof FormValues, value: string | boolean) {
     setValues((current) => ({ ...current, [field]: value }));
     if (submitted) setErrors((current) => ({ ...current, [field]: undefined }));
@@ -170,7 +182,7 @@ export default function HomePage() {
           <div className="brand-bg landing-bg" />
           <div className="beam" />
           <div className="shell">
-            <Nav count="01 — 03" label="Cola One / Fizz Mode" />
+            <Nav count="01 — 03" label="Cola One / Fizz Mode" onLogoClick={goToLanding} />
             <div className="entry">
               <div className="hero-copy">
                 <div className="mini">The fizz is live</div>
@@ -199,7 +211,7 @@ export default function HomePage() {
             ))}
           </div>
           <div className="shell">
-            <Nav count={stage === "capture" ? "02 — 03" : "03 — 03"} label="Cola One / Fizz Mode" />
+            <Nav count={stage === "capture" ? "02 — 03" : "03 — 03"} label="Cola One / Fizz Mode" onLogoClick={goToLanding} />
             <div className="inner">
               <div className="side-art" aria-hidden="true" />
               <div className="card">
@@ -262,8 +274,8 @@ export default function HomePage() {
   );
 }
 
-function Nav({ count, label }: { count: string; label: string }) {
-  return <nav className="nav"><img className="logo" src="/assets/asset-3.webp" alt="Cola One" /><div className="nav-word">{label}</div><div className="nav-count">{count}</div></nav>;
+function Nav({ count, label, onLogoClick }: { count: string; label: string; onLogoClick: () => void }) {
+  return <nav className="nav"><button className="logo-button" type="button" onClick={onLogoClick} aria-label="Back to the first view"><img className="logo" src="/assets/asset-3.webp" alt="Cola One" /></button><div className="nav-word">{label}</div><div className="nav-count">{count}</div></nav>;
 }
 
 function Ticker() {
