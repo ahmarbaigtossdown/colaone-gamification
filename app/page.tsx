@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Stage = "landing" | "capture" | "game" | "win";
 type FieldName = "name" | "email" | "phone" | "consent";
@@ -25,10 +25,20 @@ type Coupon = {
 };
 
 type CouponResponse = { success: boolean; data: Coupon[] };
+type ContactResponse = { success: boolean; message?: string };
 
 const campaignImages = ["/assets/asset-1.png", "/assets/asset-4.png", "/assets/asset-5.png"];
 
 const initialValues: FormValues = { name: "", email: "", phone: "", consent: false };
+
+function normalizePakistaniMobile(value: string) {
+  let compact = value.trim().replace(/[\s().-]/g, "");
+  if (compact.startsWith("00")) compact = `+${compact.slice(2)}`;
+
+  if (/^03\d{9}$/.test(compact)) return `+92${compact.slice(1)}`;
+  if (/^\+?923\d{9}$/.test(compact)) return compact.startsWith("+") ? compact : `+${compact}`;
+  return null;
+}
 
 function validate(values: FormValues): FormErrors {
   const errors: FormErrors = {};
@@ -36,8 +46,8 @@ function validate(values: FormValues): FormErrors {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = "Enter a valid email address.";
   }
-  if (values.phone.replace(/\D/g, "").length < 8) {
-    errors.phone = "Enter a valid phone number.";
+  if (!normalizePakistaniMobile(values.phone)) {
+    errors.phone = "Please enter a valid 11-digit mobile number.";
   }
   if (!values.consent) errors.consent = "Accept the terms to unlock your spin.";
   return errors;
@@ -73,6 +83,9 @@ export default function HomePage() {
   const [couponError, setCouponError] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const [claimed, setClaimed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const spinTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -118,12 +131,18 @@ export default function HomePage() {
   }
 
   function goToLanding() {
+    if (spinTimerRef.current !== null) {
+      window.clearTimeout(spinTimerRef.current);
+      spinTimerRef.current = null;
+    }
     setStage("landing");
     setSlide(0);
     setRotation(0);
     setIsSpinning(false);
+    setIsSubmitting(false);
     setClaimed(false);
     setCopyStatus("");
+    setSubmissionError("");
     setSubmitted(false);
     setErrors({});
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -131,6 +150,7 @@ export default function HomePage() {
 
   function updateField(field: keyof FormValues, value: string | boolean) {
     setValues((current) => ({ ...current, [field]: value }));
+    setSubmissionError("");
     if (submitted) setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
@@ -144,11 +164,50 @@ export default function HomePage() {
       document.getElementById(firstInvalid === "consent" ? "consent" : firstInvalid)?.focus();
       return;
     }
+    setSubmissionError("");
     setStage("game");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function submitRewardDetails(selectedReward: Reward) {
+    const phone = normalizePakistaniMobile(values.phone);
+    if (!phone) throw new Error("Please enter a valid 11-digit mobile number.");
+
+    const response = await fetch("/api/contact-us", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: values.name.trim(),
+        email: values.email.trim(),
+        phone,
+        fields: {
+          rewardName: selectedReward.title,
+          rewardCode: selectedReward.code,
+        },
+      }),
+    });
+    const payload = (await response.json()) as ContactResponse;
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || "Your reward details could not be saved. Please try again.");
+    }
+  }
+
+  async function finishSpin(nextReward: Reward) {
+    setIsSubmitting(true);
+    try {
+      await submitRewardDetails(nextReward);
+      setSubmissionError("");
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "Your reward details could not be saved. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+      setIsSpinning(false);
+      setStage("win");
+    }
   }
 
   function spinWheel() {
-    if (isSpinning || !rewards.length) return;
+    if (isSpinning || isSubmitting || !rewards.length) return;
     const nextReward = rewards[Math.floor(Math.random() * rewards.length)];
     setReward(nextReward);
     setRotation((current) => {
@@ -158,9 +217,9 @@ export default function HomePage() {
       return current + 2160 + correction;
     });
     setIsSpinning(true);
-    window.setTimeout(() => {
-      setIsSpinning(false);
-      setStage("win");
+    spinTimerRef.current = window.setTimeout(() => {
+      spinTimerRef.current = null;
+      void finishSpin(nextReward);
     }, 4700);
   }
 
@@ -223,14 +282,15 @@ export default function HomePage() {
                     <div className="fields">
                       <Field id="name" label="Full name *" value={values.name} placeholder="Your name" error={errors.name} onChange={(value) => updateField("name", value)} />
                       <Field id="email" label="Email *" value={values.email} placeholder="you@email.com" error={errors.email} onChange={(value) => updateField("email", value)} type="email" />
-                      <Field id="phone" label="Phone *" value={values.phone} placeholder="+92 3XX XXXXXXX" error={errors.phone} onChange={(value) => updateField("phone", value)} full />
+                      <Field id="phone" label="Phone *" value={values.phone} placeholder="+92 3XX XXXXXXX" error={errors.phone} onChange={(value) => updateField("phone", value)} type="tel" full />
                     </div>
                     <label className={`consent ${errors.consent ? "has-error" : ""}`} htmlFor="consent">
                       <input id="consent" type="checkbox" checked={values.consent} onChange={(event) => updateField("consent", event.target.checked)} aria-invalid={Boolean(errors.consent)} aria-describedby={errors.consent ? "consent-error" : undefined} />
                       <span>I agree to the Terms &amp; Conditions and Privacy Policy.</span>
                     </label>
                     {errors.consent && <p className="field-error consent-error" id="consent-error">{errors.consent}</p>}
-                    <button className="cta blue full" type="submit">UNLOCK MY SPIN →</button>
+                    {submissionError && <p className="submission-error" role="alert">{submissionError}</p>}
+                    <button className="cta blue full" type="submit" disabled={isSubmitting}>{isSubmitting ? "SUBMITTING…" : "UNLOCK MY SPIN →"}</button>
                     {submitted && Object.keys(errors).length > 0 && <p className="validation-summary" role="alert">Please fix the highlighted fields to unlock your spin.</p>}
                   </form>
                 )}
@@ -244,8 +304,8 @@ export default function HomePage() {
                     </div>
                     {isLoadingRewards && <div className="wheel-status">LOADING COUPONS…</div>}
                     {!isLoadingRewards && couponError && <div className="wheel-status wheel-error" role="alert">{couponError}</div>}
-                    {rewards.length > 0 && <Wheel rewards={rewards} rotation={rotation} onSpin={spinWheel} isSpinning={isSpinning} />}
-                    <button className="spin-btn" type="button" onClick={spinWheel} disabled={isSpinning || isLoadingRewards || !rewards.length}>{isSpinning ? "SPINNING…" : "SPIN THE WHEEL →"}</button>
+                    {rewards.length > 0 && <Wheel rewards={rewards} rotation={rotation} onSpin={spinWheel} isSpinning={isSpinning || isSubmitting} />}
+                    <button className="spin-btn" type="button" onClick={spinWheel} disabled={isSpinning || isSubmitting || isLoadingRewards || !rewards.length}>{isSpinning ? "SPINNING…" : isSubmitting ? "SAVING REWARD…" : "SPIN THE WHEEL →"}</button>
                     <div className="spin-meta">Instant reward reveal</div>
                   </div>
                 )}
@@ -257,6 +317,7 @@ export default function HomePage() {
                     <div className="win-accent" />
                     <div className="win-reward">{rewardLines[0]}<br />{rewardLines.slice(1).join(" ")}</div>
                     <p className="win-copy">{reward?.copy} — your Cola One reward is ready. Use it before the fizz runs out.</p>
+                    {submissionError && <p className="submission-error" role="alert">{submissionError}</p>}
                     <div className="reward-box">
                       <div className="reward-code"><small>Your reward code</small><strong>{reward?.code}</strong></div>
                       <button className="copy-mini" type="button" onClick={copyRewardCode}>{copyStatus || "COPY CODE"}</button>
@@ -284,7 +345,7 @@ function Ticker() {
 
 function Field({ id, label, value, placeholder, error, onChange, type = "text", full = false }: { id: FieldName; label: string; value: string; placeholder: string; error?: string; onChange: (value: string) => void; type?: string; full?: boolean }) {
   const errorId = `${id}-error`;
-  return <div className={`field ${full ? "full" : ""}`}><label htmlFor={id}>{label}</label><input id={id} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} />{error && <p className="field-error" id={errorId}>{error}</p>}</div>;
+  return <div className={`field ${full ? "full" : ""}`}><label htmlFor={id}>{label}</label><input id={id} type={type} inputMode={id === "phone" ? "tel" : undefined} autoComplete={id === "phone" ? "tel" : undefined} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} />{error && <p className="field-error" id={errorId}>{error}</p>}</div>;
 }
 
 function Wheel({ rewards, rotation, onSpin, isSpinning }: { rewards: Reward[]; rotation: number; onSpin: () => void; isSpinning: boolean }) {
